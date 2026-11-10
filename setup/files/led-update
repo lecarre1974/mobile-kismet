@@ -1,0 +1,42 @@
+#!/bin/sh
+# Pi status light, highest priority first:
+#   rapid blink  = check-in on, the unit IS transmitting
+#   solid on     = not capturing (problem, stopped, or still starting)
+#   SOS (morse)  = capturing, but needs attention (battery low or SD nearly full)
+#   heartbeat    = capturing silently, all good
+L=/sys/class/leds/ACT
+[ -d "$L" ] || exit 0
+
+# SOS: dot 200 ms, dash 600 ms, 200 ms between elements, 600 ms between
+# letters, 1400 ms before repeating. "on dur on 0 off dur off 0" gives hard steps.
+d() { printf '1 %s 1 0 0 %s 0 0 ' "$1" "$2"; }
+SOS="$(d 200 200)$(d 200 200)$(d 200 600)$(d 600 200)$(d 600 200)$(d 600 600)$(d 200 200)$(d 200 200)$(d 200 1400)"
+
+sos() {
+    if ! grep -qw pattern "$L/trigger"; then
+        modprobe ledtrig-pattern 2>/dev/null
+    fi
+    if grep -qw pattern "$L/trigger"; then
+        echo pattern > "$L/trigger"
+        echo "$SOS" > "$L/pattern"
+        echo -1 > "$L/repeat"
+    else
+        # No pattern trigger in this kernel: fall back to a slow even blink.
+        echo timer > "$L/trigger"
+        echo 1000 > "$L/delay_on"
+        echo 1000 > "$L/delay_off"
+    fi
+}
+
+state=$(cat /run/capture/state 2>/dev/null)
+if [ -e /run/checkin/active ]; then
+    echo timer > "$L/trigger"
+    echo 100 > "$L/delay_on"
+    echo 100 > "$L/delay_off"
+elif [ "$state" != capturing ]; then
+    echo default-on > "$L/trigger"
+elif [ -s /run/capture/warning ]; then
+    sos
+else
+    echo heartbeat > "$L/trigger"
+fi

@@ -1,0 +1,6 @@
+# Per-unit record (template). Copy to setup/units/unit-NN.txt and fill in.
+# This folder is gitignored; keep real values in a password manager.
+SSID=<CHECK-IN-SSID>
+PSK=<CHECK-IN-PASSWORD>
+LOGIN_USER=user
+LOGIN_PASSWORD=<LOGIN-PASSWORD>

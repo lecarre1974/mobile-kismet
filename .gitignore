@@ -1,0 +1,9 @@
+# Per-unit secrets (SSIDs, Wi-Fi + login passwords) and filled guides — never commit
+setup/units/
+
+# Local SD-card backups and logs captured during setup
+sd-backup/
+*.log
+
+# macOS
+.DS_Store

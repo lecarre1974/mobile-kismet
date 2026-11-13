@@ -34,10 +34,10 @@ systemctl disable usb0-up.service boot-diag.service 2>/dev/null || true
 rm -f /etc/systemd/system/usb0-up.service /etc/systemd/system/boot-diag.service \
       /usr/local/bin/boot-diag.sh /etc/udev/rules.d/90-usb0-nm-managed.rules
 rm -f /boot/firmware/boot-diag.log /boot/firmware/usb-net-setup.log /boot/firmware/pi-setup2.log
-rm -f /etc/sudoers.d/090-kismet-setup-temp
+rm -f /etc/sudoers.d/090-survey-setup-temp
 UHOME=$(getent passwd user | cut -d: -f6)
 if [ -f "$UHOME/.ssh/authorized_keys" ]; then
-    sed -i '/kismet-setup-temp/d' "$UHOME/.ssh/authorized_keys"
+    sed -i '/survey-setup-temp/d' "$UHOME/.ssh/authorized_keys"
     [ -s "$UHOME/.ssh/authorized_keys" ] || rm -f "$UHOME/.ssh/authorized_keys"
 fi
 rm -f /root/silent-test.sh /var/log/silent-test.log "$UHOME/.bash_history" /root/.bash_history
@@ -69,8 +69,8 @@ echo "bluetooth: $(systemctl is-enabled bluetooth.service 2>&1)"
 echo "NM unmanaged: $(cat /etc/NetworkManager/conf.d/90-capture-adapter-unmanaged.conf | tail -1)"
 echo "saved networks: $(ls /etc/NetworkManager/system-connections | wc -l)"
 echo "dev flag present: $([ -e /etc/capture/dev-home-wifi ] && echo yes || echo no)"
-echo "temp sudoers present: $([ -e /etc/sudoers.d/090-kismet-setup-temp ] && echo yes || echo no)"
-echo "temp ssh key present: $(grep -c kismet-setup-temp "$UHOME/.ssh/authorized_keys" 2>/dev/null || echo 0)"
+echo "temp sudoers present: $([ -e /etc/sudoers.d/090-survey-setup-temp ] && echo yes || echo no)"
+echo "temp ssh key present: $(grep -c survey-setup-temp "$UHOME/.ssh/authorized_keys" 2>/dev/null || echo 0)"
 echo "capture enabled at boot: $(systemctl is-enabled wifi-capture.service)"
 echo "rtc sync enabled: $(systemctl is-enabled rtc-sync.service)"
 echo "pisugar double tap: $(grep -c 'checkin-toggle.sh toggle' /etc/pisugar-server/config.json)"

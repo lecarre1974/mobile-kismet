@@ -347,7 +347,7 @@ a{color:var(--accent);overflow-wrap:anywhere}.sys{display:grid;grid-template-col
 <div id=focusnow class=sub style="margin-bottom:8px">Capturing all channels.</div>
 <div class=btns style="margin-bottom:8px"><button id=btnFocusSel class=go>Focus on selected</button><button id=btnFocusAll hidden>Back to all channels</button></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id=addkind style="font:inherit;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--card2);color:var(--text)"><option value=ssid>SSID name</option><option value=bssid>BSSID (MAC)</option></select>
-<input id=addval style="flex:1;min-width:160px;font:inherit;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--card2);color:var(--text)" placeholder="Type a name or AA:BB:CC:DD:EE:FF, press Add">
+<input id=addval style="flex:1;min-width:160px;font:inherit;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--card2);color:var(--text)" placeholder="Paste one or more MACs (commas or new lines OK), or a name; press Add">
 <button id=btnAdd>Add to focus</button></div>
 <div id=pending class=sub style="margin-top:8px"></div></section>
 <section class=card><h2>Networks <span id=apcount class=dimtxt></span></h2><input type=search id=apq placeholder="Filter by name, address, channel, encryption">
@@ -365,10 +365,18 @@ const ago=(t,now)=>t?dur(now-t)+" ago":"-";
 const band=f=>!f?"-":f.mhz<3000?"2.4 GHz":f.mhz<5900?"5 GHz":"6 GHz";
 const LABEL={capturing:"Capturing","waiting-for-adapter":"Waiting for adapter","no-adapter":"Adapter not found","adapter-error":"Adapter error","disk-full":"SD card full",restarting:"Restarting capture",stopped:"Capture stopped"};
 let hist=[],last=null,S=null,V=null,now=0,sel=new Set(),curTargets=[];
-async function postJSON(a,obj,q){if(q&&!confirm(q))return;try{const r=await fetch("/api/"+a,{method:"POST",headers:{"X-Requested-With":"capture-ui","Content-Type":"application/json"},body:JSON.stringify(obj)});const j=await r.json();if(!j.ok)alert("Failed: "+j.output);}catch(e){}setTimeout(tick,1500)}
+async function postJSON(a,obj,q){if(q&&!confirm(q))return null;try{const r=await fetch("/api/"+a,{method:"POST",headers:{"X-Requested-With":"capture-ui","Content-Type":"application/json"},body:JSON.stringify(obj)});const j=await r.json();if(!j.ok)alert("Failed: "+j.output);setTimeout(tick,1500);return j;}catch(e){alert("Could not reach the unit. Stay on the check-in Wi-Fi and try again.");return null;}}
 $("btnFocusSel").onclick=()=>{if(!sel.size)return alert("Tick one or more networks first.");postJSON("focus/set",{targets:[...sel].map(v=>({type:"bssid",value:v}))},"Focus the radio on "+sel.size+" selected network(s)? It will dwell on their channels only. Power-cycle returns to all channels.")};
 $("btnFocusAll").onclick=()=>postJSON("focus/clear",{},"Go back to scanning all channels?");
-$("btnAdd").onclick=()=>{const k=$("addkind").value,v=$("addval").value.trim();if(!v)return;if(k==="bssid"&&!/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(v))return alert("Enter a MAC like AA:BB:CC:DD:EE:FF");const t=curTargets.map(([kind,val])=>({type:kind,value:val}));t.push({type:k,value:v});$("addval").value="";postJSON("focus/set",{targets:t})};
+$("btnAdd").onclick=()=>{const k=$("addkind").value,raw=$("addval").value.trim();if(!raw)return;const t=curTargets.map(([kind,val])=>({type:kind,value:val}));
+if(k==="ssid"){t.push({type:"ssid",value:raw})}
+else{const fmt=h=>h.match(/.{2}/g).join(":").toUpperCase();let toks=raw.split(/[\s,;]+/).filter(Boolean);if(toks.length<2){const H=raw.replace(/[^0-9a-fA-F]/g,"");if(H.length>12&&H.length%12===0)toks=H.match(/.{12}/g)}
+const good=[],bad=[];toks.forEach(x=>{const h=x.replace(/[^0-9a-fA-F]/g,"");if(h.length===12)good.push(fmt(h));else bad.push(x)});
+if(!good.length)return alert("Enter one or more MAC addresses like AA:BB:CC:DD:EE:FF");
+const seen=new Set(t.filter(o=>o.type==="bssid").map(o=>o.value));good.forEach(v=>{if(!seen.has(v)){seen.add(v);t.push({type:"bssid",value:v})}});
+if(t.length>32){t.length=32;alert("Focus holds up to 32 networks; the extra were ignored.")}
+else if(bad.length)alert("Added "+good.length+". Skipped (not a MAC address): "+bad.join(", "))}
+$("addval").value="";postJSON("focus/set",{targets:t})};
 $("addval").addEventListener("keydown",e=>{if(e.key==="Enter")$("btnAdd").click()});
 $("apall").onchange=e=>{const rows=V?V.aps:[];const aq=$("apq").value.toLowerCase();rows.filter(a=>!aq||[a.essid,a.bssid,a.privacy,String(a.channel)].join(" ").toLowerCase().includes(aq)).forEach(a=>{if(e.target.checked)sel.add(a.bssid);else sel.delete(a.bssid)});render()};
 async function post(a,q){if(q&&!confirm(q))return;try{const r=await fetch("/api/"+a,{method:"POST",headers:{"X-Requested-With":"capture-ui"}});const j=await r.json();if(!j.ok)alert("Failed: "+j.output);}catch(e){}setTimeout(tick,1500)}
@@ -418,8 +426,8 @@ $("chaxis").replaceChildren(el("span",{text:keys.length?"ch "+keys[0]:"no networ
 const pv=Object.entries(V.privacy).sort((a,b)=>b[1]-a[1]),pm=Math.max(1,...pv.map(p=>p[1]));
 $("mix").replaceChildren(...pv.map(([k,v])=>el("div",null,el("span",{text:k.trim()==="OPN"?"Open":k}),el("i",{style:"width:"+Math.max(4,v/pm*55)+"%"}),el("em",{text:v}))))}
 async function survey(){try{V=await(await fetch("/api/survey")).json();render()}catch(e){}}
-function delFile(session,name){postJSON("files/delete",{session,name},'Delete "'+name+'"? This cannot be undone.');setTimeout(files,1600)}
-function delSession(session){postJSON("files/delete",{session},'Delete the whole session "'+session+'" and all its files? This cannot be undone.');setTimeout(files,1600)}
+async function delFile(session,name){const j=await postJSON("files/delete",{session,name},'Delete "'+name+'"? This cannot be undone.');if(j){await files();}}
+async function delSession(session){const j=await postJSON("files/delete",{session},'Delete the whole session "'+session+'" and all its files? This cannot be undone.');if(j){await files();}}
 async function files(){try{const s=await(await fetch("/api/files")).json();const w=$("files");w.className="";w.replaceChildren();if(!s.length){w.className="dimtxt";w.textContent="No captures yet.";return}
 s.forEach((x,i)=>{const delBtn=el("button",{cls:"stop",style:"padding:6px 10px"},"Delete session");delBtn.disabled=x.current;delBtn.onclick=()=>delSession(x.session);
 const d=el("details",i===0?{open:""}:null,el("summary",null,el("span",{text:x.session+(x.current?" (recording)":"")}),el("span",{cls:"dimtxt",text:x.files.length+" files, "+size(x.size)})),
